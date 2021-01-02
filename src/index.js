@@ -20,10 +20,10 @@ module.exports = {
 	 */
 	settings: {
 		matrix: {
-			serverPart: "mtx.pointprism.com",
+			serverPart: process.env.MATRIX_SERVER_PART,
 
-			userId: process.env.MATRIX_USER_ID || "apiuser",
-			password: process.env.MATRIX_USER_PASS || "2nfyxbr675",
+			userId: process.env.MATRIX_USER_ID,
+			password: process.env.MATRIX_USER_PASS,
 			paths: {
 				login: "_matrix/client/r0/login",
 				addUser: "_synapse/admin/v2/users/",
@@ -38,7 +38,7 @@ module.exports = {
 		},
 		httpClient: {
 			defaultOptions: {
-				prefixUrl: "https://mtx.pointprism.com",
+				prefixUrl: process.env.MATRIX_SERVER_URL,
 				token: undefined,
 				handlers: [
 					(options, next) => {
