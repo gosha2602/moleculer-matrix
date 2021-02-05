@@ -5,7 +5,25 @@
  */
 
 "use strict";
-const HTTPClient = require("moleculer-http-client");
+
+const _ = require("lodash");
+const axios = require("axios");
+const qs = require("qs");
+
+const MoleculerError = require("moleculer").Errors.MoleculerServerError;
+
+const METHODS = ["get", "put", "post", "delete", "patch", "options", "head", "request"];
+
+class MoleculerAxiosError extends MoleculerError {}
+
+const RESPONDERS = {
+	full: res => res,
+	data: res => res.data,
+	headers: res => res.headers,
+	status: res => res.status,
+	ok: res => res.status < 400
+};
+
 /**
  * Service mixin allowing Moleculer services to make matrix-synapse admin functions
  *
@@ -36,21 +54,23 @@ module.exports = {
 				userPushers: "_synapse/admin/v1/users/"
 			}
 		},
-		httpClient: {
-			defaultOptions: {
-				prefixUrl: process.env.MATRIX_SERVER_URL,
-				token: undefined,
-				handlers: [
-					(options, next) => {
-						// Authorization
-						if (options.token && !options.headers.authorization) {
-							options.headers.authorization = `Bearer ${options.token}`;
-							console.log("auth");
-						}
-
-						return next(options);
-					}
-				]
+		baseUrl: process.env.MATRIX_SERVER_URL,
+		axios: {
+			expose: null,
+			responder: "full",
+			config: {
+				paramsSerializer: function (params) {
+					return qs.stringify(params, { arrayFormat: "brackets" });
+				}
+			},
+			logging: {
+				level: "info"
+				// request: {
+				// 	include: ["url", "method"]
+				// },
+				// response: {
+				// 	include: ["config.url", "status", "statusText"]
+				// }
 			}
 		}
 	},
@@ -363,17 +383,96 @@ module.exports = {
 		},
 		makeFullUserId(username) {
 			return "@" + username + ":" + this.settings.matrix.serverPart;
+		},
+		_get(url, params) {
+			const auth = params.token ? `Bearer ${params.token}` : "";
+			const config = {
+				url: url,
+				method: "GET",
+				params: params,
+				headers: { authorization: auth }
+			};
+			return this.axios(config);
+		},
+		_post(url, params) {
+			const auth = params.token ? `Bearer ${params.token}` : "";
+			const config = {
+				url: url,
+				method: "POST",
+				data: params,
+				headers: { authorization: auth }
+			};
+			return this.axios(config);
+		},
+
+		_put(url, params) {
+			const auth = params.token ? `Bearer ${params.token}` : "";
+			const config = {
+				url: url,
+				method: "PUT",
+				data: params,
+				headers: { authorization: auth }
+			};
+			return this.axios(config);
 		}
 	},
-	created() {},
+	created() {
+		const { config, responder, expose, logging } = this.settings.axios;
+
+		this.axios = axios.create(config);
+
+		this.$responder = _.isFunction(responder)
+			? this.settings.axios.responder
+			: RESPONDERS[responder];
+
+		// TODO: crap logging
+		if (logging && logging.level in this.logger) {
+			this.axios.interceptors.request.use(config => {
+				// TODO get uri method of axios is broken
+				this.logger[logging.level](
+					`=> ${config.method.toUpperCase()} ${this.axios.getUri(config)}`
+				);
+				return config;
+			});
+
+			this.axios.interceptors.response.use(response => {
+				this.logger[logging.level](
+					`<= ${response.status} - ${response.statusText} ${this.axios.getUri(
+						response.config
+					)}`
+				);
+				return response;
+			});
+
+			this.axios.interceptors.response.use(null, err => {
+				if (err.response) {
+					// The request was made and the server responded with a status code
+					// that falls out of the range of 2xx
+					this.logger.error(
+						`Received error response: ${err.response.status} - ${err.response.statusText}`,
+						err.response.data
+					);
+				} else if (err.request) {
+					// The request was made but no response was received
+					this.logger.error("No response received", err.message);
+				} else {
+					// Something happened in setting up the request that triggered an Error
+					this.logger.error("Error creating request", err.message);
+				}
+				return this.Promise.reject(
+					new MoleculerAxiosError(err.message, 500, "HTTP_REQUEST_ERROR")
+				);
+			});
+		}
+	},
 
 	/**
 	 * Service started lifecycle event handler
 	 */
 	async started() {
+		this.axios.baseUrl = this.settings.baseUrl;
 		this.dataAccess = await this.login();
 		console.log("dataAccess", this.dataAccess);
-		this.settings.httpClient.defaultOptions.token = this.dataAccess.access_token;
 	},
 
 	/**
