@@ -32,7 +32,7 @@ const RESPONDERS = {
  */
 module.exports = {
 	name: "matrix",
-	mixins: [HTTPClient],
+	mixins: [],
 	/**
 	 * Default settings
 	 */
