@@ -470,7 +470,7 @@ module.exports = {
 	 * Service started lifecycle event handler
 	 */
 	async started() {
-		this.axios.baseUrl = this.settings.baseUrl;
+		this.axios.defaults.baseUrl = this.settings.baseUrl;
 		this.dataAccess = await this.login();
 		console.log("dataAccess", this.dataAccess);
 	},

@@ -6,7 +6,7 @@ const MyService = require("../../src");
 describe("Test MyService", () => {
 	const broker = new ServiceBroker();
 	const service = broker.createService(MyService);
-	const user = "cheeky_monkey";
+	const user = "";
 	beforeAll(() => broker.start());
 	afterAll(() => broker.stop());
 
@@ -21,7 +21,7 @@ describe("Test MyService", () => {
 	});*/
 
 	it("should return add user data", () => {
-		return broker.call("matrix.addUser", { user: user, password: "260275" }).then(res => {
+		return broker.call("matrix.addUser", { user: user, password: "" }).then(res => {
 			expect(res).toBeDefined();
 		});
 	});
