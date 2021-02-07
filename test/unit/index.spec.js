@@ -4,9 +4,16 @@ const { ServiceBroker } = require("moleculer");
 const MyService = require("../../src");
 
 describe("Test MyService", () => {
+	const OLD_ENV = process.env;
+
+	beforeEach(() => {
+		jest.resetModules(); // Most important - it clears the cache
+		process.env = { ...OLD_ENV }; // Make a copy
+	});
+
 	const broker = new ServiceBroker();
 	const service = broker.createService(MyService);
-	const user = "";
+	const user = "test_user";
 	beforeAll(() => broker.start());
 	afterAll(() => broker.stop());
 
@@ -21,7 +28,7 @@ describe("Test MyService", () => {
 	});*/
 
 	it("should return add user data", () => {
-		return broker.call("matrix.addUser", { user: user, password: "" }).then(res => {
+		return broker.call("matrix.addUser", { user: user, password: "123456qwert" }).then(res => {
 			expect(res).toBeDefined();
 		});
 	});

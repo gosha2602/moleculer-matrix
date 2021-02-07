@@ -6,7 +6,7 @@
 	"scripts": {
 		"dev": "nodemon examples/index.js",
 		"ci": "jest --watch",
-		"test": "jest --coverage",
+		"test": "set NODE_ENV=test&&jest --coverage",
 		"lint": "eslint --ext=.js src test",
 		"deps": "npm-check -u",
 		"coverall": "cat ./coverage/lcov.info | ./node_modules/coveralls/bin/coveralls.js"
@@ -56,6 +56,7 @@
 		"node": ">= 10.x.x"
 	},
 	"dependencies": {
+		"axios": "^0.21.1",
 		"dotenv": "^8.2.0"
 	}
 }

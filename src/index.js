@@ -338,31 +338,31 @@ module.exports = {
 			return this._matrixPost(url, params);
 		},
 		async _matrixPut(url, params) {
-			const { body } = await this._put(url, {
+			const { data } = await this._put(url, {
 				responseType: "json",
 				json: params,
 				token: this.dataAccess.access_token
 			});
 
-			return body;
+			return data;
 		},
 		async _matrixPost(url, params) {
-			const { body } = await this._post(url, {
+			const { data } = await this._post(url, {
 				responseType: "json",
 				json: params,
 				token: this.dataAccess.access_token
 			});
 
-			return body;
+			return data;
 		},
 		async _matrixGet(url, params = {}) {
-			const { body } = await this._get(url, {
+			const { data } = await this._get(url, {
 				responseType: "json",
 				searchParams: params,
 				token: this.dataAccess.access_token
 			});
 
-			return body;
+			return data;
 		},
 		async login() {
 			const params = {
@@ -373,13 +373,14 @@ module.exports = {
 				password: this.settings.matrix.password,
 				type: "m.login.password"
 			};
+			const config = {
+				url: this.settings.baseUrl + this.settings.matrix.paths.login,
+				method: "POST",
+				data: params
+			};
+			const { data } = await this.axios(config);
 
-			const { body } = await this._post(this.settings.matrix.paths.login, {
-				responseType: "json",
-				json: params
-			});
-
-			return body;
+			return data;
 		},
 		makeFullUserId(username) {
 			return "@" + username + ":" + this.settings.matrix.serverPart;
@@ -387,7 +388,7 @@ module.exports = {
 		_get(url, params) {
 			const auth = params.token ? `Bearer ${params.token}` : "";
 			const config = {
-				url: url,
+				url: this.settings.baseUrl + url,
 				method: "GET",
 				params: params,
 				headers: { authorization: auth }
@@ -397,7 +398,7 @@ module.exports = {
 		_post(url, params) {
 			const auth = params.token ? `Bearer ${params.token}` : "";
 			const config = {
-				url: url,
+				url: this.settings.baseUrl + url,
 				method: "POST",
 				data: params,
 				headers: { authorization: auth }
@@ -408,69 +409,71 @@ module.exports = {
 		_put(url, params) {
 			const auth = params.token ? `Bearer ${params.token}` : "";
 			const config = {
-				url: url,
+				url: this.settings.baseUrl + url,
 				method: "PUT",
 				data: params,
 				headers: { authorization: auth }
 			};
 			return this.axios(config);
-		}
-	},
-	created() {
-		const { config, responder, expose, logging } = this.settings.axios;
+		},
+		_createAxios() {
+			const { config, responder, expose, logging } = this.schema.settings.axios;
+			console.log("baseUrl", this.schema.settings);
+			config.baseUrl = this.schema.settings.baseUrl;
+			this.axios = axios.create(config);
 
-		this.axios = axios.create(config);
+			this.$responder = _.isFunction(responder)
+				? this.schema.settings.axios.responder
+				: RESPONDERS[responder];
 
-		this.$responder = _.isFunction(responder)
-			? this.settings.axios.responder
-			: RESPONDERS[responder];
-
-		// TODO: crap logging
-		if (logging && logging.level in this.logger) {
-			this.axios.interceptors.request.use(config => {
-				// TODO get uri method of axios is broken
-				this.logger[logging.level](
-					`=> ${config.method.toUpperCase()} ${this.axios.getUri(config)}`
-				);
-				return config;
-			});
-
-			this.axios.interceptors.response.use(response => {
-				this.logger[logging.level](
-					`<= ${response.status} - ${response.statusText} ${this.axios.getUri(
-						response.config
-					)}`
-				);
-				return response;
-			});
-
-			this.axios.interceptors.response.use(null, err => {
-				if (err.response) {
-					// The request was made and the server responded with a status code
-					// that falls out of the range of 2xx
-					this.logger.error(
-						`Received error response: ${err.response.status} - ${err.response.statusText}`,
-						err.response.data
+			// TODO: crap logging
+			if (logging && logging.level in this.logger) {
+				this.axios.interceptors.request.use(config => {
+					// TODO get uri method of axios is broken
+					this.logger[logging.level](
+						`=> ${config.method.toUpperCase()} ${this.axios.getUri(config)}`
 					);
-				} else if (err.request) {
-					// The request was made but no response was received
-					this.logger.error("No response received", err.message);
-				} else {
-					// Something happened in setting up the request that triggered an Error
-					this.logger.error("Error creating request", err.message);
-				}
-				return this.Promise.reject(
-					new MoleculerAxiosError(err.message, 500, "HTTP_REQUEST_ERROR")
-				);
-			});
+					return config;
+				});
+
+				this.axios.interceptors.response.use(response => {
+					this.logger[logging.level](
+						`<= ${response.status} - ${response.statusText} ${this.axios.getUri(
+							response.config
+						)}`
+					);
+					return response;
+				});
+
+				this.axios.interceptors.response.use(null, err => {
+					if (err.response) {
+						// The request was made and the server responded with a status code
+						// that falls out of the range of 2xx
+						this.logger.error(
+							`Received error response: ${err.response.status} - ${err.response.statusText}`,
+							err.response.data
+						);
+					} else if (err.request) {
+						// The request was made but no response was received
+						this.logger.error("No response received", err.message);
+					} else {
+						// Something happened in setting up the request that triggered an Error
+						this.logger.error("Error creating request", err.message);
+					}
+					return this.Promise.reject(
+						new MoleculerAxiosError(err.message, 500, "HTTP_REQUEST_ERROR")
+					);
+				});
+			}
 		}
 	},
+	created() {},
 
 	/**
 	 * Service started lifecycle event handler
 	 */
 	async started() {
-		this.axios.defaults.baseUrl = this.settings.baseUrl;
+		this._createAxios();
 		this.dataAccess = await this.login();
 		console.log("dataAccess", this.dataAccess);
 	},
