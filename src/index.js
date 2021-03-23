@@ -25,11 +25,16 @@ const RESPONDERS = {
 };
 
 /**
+ *  @reference typedef Context from `moleculer`
+ */
+
+/**
  * Service mixin allowing Moleculer services to make matrix-synapse admin functions
  *
  * @name moleculer-matrix
  * @module Service
  */
+
 module.exports = {
 	name: "matrix",
 	mixins: [],
@@ -273,6 +278,86 @@ module.exports = {
 				const user = ctx.params.user;
 				return this._getAllPushers(user);
 			}
+		},
+
+		getRoomDetails: {
+			params: {
+				roomId: "string"
+			},
+			handler(ctx) {
+				return this._getRoomDetails(ctx.params.roomId);
+			}
+		},
+
+		/**
+		 * This endpoint allows the creation of pushers for  user .
+		 * @param {string} user short user name
+		 * @param {object} pusher pusher object
+		 * @example  <caption>pusher</caption>
+		 * {
+		 *	"app_display_name": "Mat Rix",
+		 *	"app_id": "com.example.app.ios",
+		 *	"append": false,
+		 *	"data": {
+		 *			"format": "event_id_only",
+		 *			"url": "https://push-gateway.location.here/_matrix/push/v1/notify"
+		 *			},
+		 *	"device_display_name": "iPhone 9",
+		 *	"kind": "http",
+		 *	"lang": "en",
+		 *	"profile_tag": "xxyyzz",
+		 * 	"pushkey": "APA91bHPRgkF3JUikC4ENAHEeMrd41Zxv3hVZjC9KtT8OvPVGJ-hQMRKRrZuJAEcl7B338qju59zJMjw2DELjzEvxwYv7hH5Ynpc1ODQ0aT4U4OFEeco8ohsN5PjL1iC2dNtk2BAokeMCg2ZXKqpc8FXKmhX94kIxQ"
+		 *  }
+		 */
+
+		addPusher: {
+			params: {
+				user: "string",
+				pusher: { type: "object" }
+			},
+			async handler(ctx) {
+				const params = ctx.params;
+				const { access_token } = await this.loginAsUser(params.user);
+				return await this._addPusher(access_token, params.pusher);
+			}
+		},
+		/**
+		 * Create room
+		 * @param {string} admin room owner (team)
+		 * @param {string} roomAlias roomAlias
+		 * @param {string} name room name
+		 * @param {string} [preset=private_chat] room preset
+		 * @returns {{room_id:string}} RoomObject Information about the newly created room.
+		 * @example     {"room_id": "!sefiuhWgwghwWgh:example.com"}
+		 */
+		createRoom: {
+			params: {
+				admin: "string",
+				roomAlias: "string",
+				name: "string",
+				preset: { type: "string", optional: true, default: "private_chat" }
+			},
+			handler(ctx) {
+				return this._createRoom(ctx.params);
+			}
+		},
+		/**
+		 *  addRoomMembership - invite user join to room
+		 * @param {string} roomId  matrix roomId
+		 * @param {string} user invited username
+		 * @param {string} roomAdmin room owner (admin) username
+		 * @returns {Promise}
+		 */
+		addRoomMembership: {
+			params: {
+				roomId: "string",
+				user: "string",
+				roomAdmin: "string"
+			},
+			handler(ctx) {
+				const params = ctx.params;
+				return this._addRoomMembership(params);
+			}
 		}
 	},
 
@@ -311,10 +396,28 @@ module.exports = {
 				"/joined_rooms";
 			return this._matrixGet(url, {});
 		},
+		_getRoomDetails(roomId) {
+			const url = `_synapse/admin/v1/rooms/${roomId}`;
+
+			return this._matrixGet(url, {});
+		},
 		_getAllPushers(user) {
 			const url =
 				this.settings.matrix.paths.userPushers + this.makeFullUserId(user) + "/pushers";
 			return this._matrixGet(url, {});
+		},
+		async _addPusher(accessToken, pusher) {
+			const auth = `Bearer ${accessToken}`;
+			const params = {
+				pusher: pusher
+			};
+			const config = {
+				url: this.settings.baseUrl + "_matrix/client/r0/pushers/set",
+				method: "POST",
+				data: pusher,
+				headers: { authorization: auth }
+			};
+			return await this.axios(config);
 		},
 		_deactivateUser(user, erase = false) {
 			const url = this.settings.matrix.paths.deactivate + this.makeFullUserId(user);
@@ -336,6 +439,42 @@ module.exports = {
 				logout_devices: logout_devices
 			};
 			return this._matrixPost(url, params);
+		},
+		async _createRoom(params) {
+			const room = {
+				creation_content: {
+					"m.federate": false
+				},
+				name: params.name,
+				preset: params.preset,
+				room_alias_name: params.roomAlias
+			};
+			const { access_token } = await this.loginAsUser(params.admin);
+			const auth = `Bearer ${access_token}`;
+			const config = {
+				url: this.settings.baseUrl + "_matrix/client/r0/createRoom",
+				method: "POST",
+				data: room,
+				headers: { authorization: auth }
+			};
+			const { data } = await this.axios(config);
+			return data;
+		},
+		async _addRoomMembership(params) {
+			const { roomAdmin, user, roomId } = params;
+			const url = `${this.settings.baseUrl}_matrix/client/r0/rooms/${roomId}/invite`;
+			const postData = { user_id: this.makeFullUserId(user) };
+			const { access_token } = await this.loginAsUser(roomAdmin);
+			const auth = `Bearer ${access_token}`;
+
+			const config = {
+				url: url,
+				method: "POST",
+				data: postData,
+				headers: { authorization: auth }
+			};
+			const { data } = await this.axios(config);
+			return data;
 		},
 		async _matrixPut(url, params) {
 			const { data } = await this._put(url, {
@@ -382,8 +521,17 @@ module.exports = {
 
 			return data;
 		},
+		async loginAsUser(user) {
+			const url = "_synapse/admin/v1/users/" + this.makeFullUserId(user) + "/login";
+
+			const data = await this._matrixPost(url, {});
+
+			return data;
+		},
 		makeFullUserId(username) {
-			return "@" + username + ":" + this.settings.matrix.serverPart;
+			if (username.charAt(0) !== "@")
+				return "@" + username + ":" + this.settings.matrix.serverPart;
+			else return username;
 		},
 		_get(url, params) {
 			const auth = params.token ? `Bearer ${params.token}` : "";
@@ -400,7 +548,7 @@ module.exports = {
 			const config = {
 				url: this.settings.baseUrl + url,
 				method: "POST",
-				data: params,
+				data: params.json,
 				headers: { authorization: auth }
 			};
 			return this.axios(config);
@@ -418,7 +566,7 @@ module.exports = {
 		},
 		_createAxios() {
 			const { config, responder, expose, logging } = this.schema.settings.axios;
-			console.log("baseUrl", this.schema.settings);
+
 			config.baseUrl = this.schema.settings.baseUrl;
 			this.axios = axios.create(config);
 
@@ -475,7 +623,6 @@ module.exports = {
 	async started() {
 		this._createAxios();
 		this.dataAccess = await this.login();
-		console.log("dataAccess", this.dataAccess);
 	},
 
 	/**
