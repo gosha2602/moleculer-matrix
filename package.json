@@ -1,6 +1,6 @@
 {
 	"name": "moleculer-matrix",
-	"version": "0.1.2",
+	"version": "0.1.3",
 	"description": "Matrix client server api  wrapper for moleculer ",
 	"main": "index.js",
 	"scripts": {
