@@ -26,13 +26,13 @@ const RESPONDERS = {
 
 /**
  *  @reference typedef Context from `moleculer`
+ *
  */
 
 /**
  * Service mixin allowing Moleculer services to make matrix-synapse admin functions
  *
- * @name moleculer-matrix
- * @module Service
+ * @module moleculer-matrix
  */
 
 module.exports = {
@@ -82,11 +82,13 @@ module.exports = {
 
 	/**
 	 * Actions
+	 *
 	 */
 	actions: {
 		async test(ctx) {
 			return await this.login();
 		},
+
 		/**
 		 * Returns  local user accounts.
 		 *
@@ -122,6 +124,7 @@ module.exports = {
 		},
 		/**
 		 * Create or modify Account
+		 *
 		 * @param {String} user username example "user1"
 		 * @param {String} password user password
 		 * @param {Boolean} admin user is admin default false
@@ -362,20 +365,45 @@ module.exports = {
 	},
 
 	/**
-	 * Methods
+	 * Methods	 *
 	 */
 	methods: {
+		/**
+		 * getUsers method
+		 * @param {Object} params
+		 * @returns {Promise}
+		 * @private
+		 */
 		_getUsers(params) {
 			return this._matrixGet(this.settings.matrix.paths.getUsers, params);
 		},
+
+		/**
+		 * getUser method
+		 * @param {string} user
+		 * @returns {Promise}
+		 */
+
 		_getUser(user) {
 			const url = this.settings.matrix.paths.addUser + this.makeFullUserId(user);
 			return this._matrixGet(url, {});
 		},
+
+		/**
+		 * getUserSessions
+		 * @param {string} user
+		 * @returns {Promise}
+		 */
 		_getUserSessions(user) {
 			const url = this.settings.matrix.paths.userSessions + this.makeFullUserId(user);
 			return this._matrixGet(url, {});
 		},
+
+		/**
+		 * getUserDevices
+		 * @param {string} user
+		 * @returns {Promise}
+		 */
 		_getUserDevices(user) {
 			const url =
 				this.settings.matrix.paths.userDevices + this.makeFullUserId(user) + "/devices";
@@ -389,6 +417,19 @@ module.exports = {
 				device;
 			return this._matrixGet(url, {});
 		},
+		/**
+		 * Gets a list of all room_id that a specific user_id is member.
+		 * @param {string} user
+		 * @returns {Promise<Object>}
+		 * @example
+		 * {
+		 * joined_rooms: [
+		 *     "!DuGcnbhHGaSZQoNQR:matrix.org",
+		 *       "!ZtSaPCawyWtxfWiIy:matrix.org"
+		 *     ],
+		 * total: 2
+		 *  }
+		 */
 		_getRoomsMemberships(user) {
 			const url =
 				this.settings.matrix.paths.roomsMemberships +
@@ -440,6 +481,18 @@ module.exports = {
 			};
 			return this._matrixPost(url, params);
 		},
+		/**
+		 * Create room
+		 * @param  params {object}
+		 * @param params.name {string} - room name
+		 * @param params.preset {string} - room preset use `private_chat`
+		 * @param params.roomAlias {string} - room alias
+		 * @param params.admin {string} - room admin username
+		 *
+		 * @returns {Promise}
+		 * @fulfil {Object}
+		 * @example { room_id: "!sefiuhWgwghwWgh:example.com"}
+		 */
 		async _createRoom(params) {
 			const room = {
 				creation_content: {
@@ -460,6 +513,14 @@ module.exports = {
 			const { data } = await this.axios(config);
 			return data;
 		},
+		/**
+		 * _addRoomMembership send invite  from roomAdmin to user for join in room
+		 * @param {Object} params
+		 * @param {string} params.roomAdmin
+		 * @param {string} params.user
+		 * @param {string} params.roomId
+		 * @returns {Promise}
+		 */
 		async _addRoomMembership(params) {
 			const { roomAdmin, user, roomId } = params;
 			const url = `${this.settings.baseUrl}_matrix/client/r0/rooms/${roomId}/invite`;
@@ -503,6 +564,10 @@ module.exports = {
 
 			return data;
 		},
+		/**
+		 * Login
+		 * @returns {Promise}
+		 */
 		async login() {
 			const params = {
 				identifier: {
@@ -521,6 +586,14 @@ module.exports = {
 
 			return data;
 		},
+		/**
+		 * Login as a user.
+		 * Get an access token that can be used to authenticate as that user. Useful for when admins wish to do actions on behalf of a user.
+		 * @param user {string} `username`
+		 * @returns {Promise}
+		 * @fulfil {{access_token: string}}
+		 * @example { access_token: "<opaque_access_token_string>"}
+		 */
 		async loginAsUser(user) {
 			const url = "_synapse/admin/v1/users/" + this.makeFullUserId(user) + "/login";
 
@@ -538,7 +611,7 @@ module.exports = {
 			const config = {
 				url: this.settings.baseUrl + url,
 				method: "GET",
-				params: params,
+				params: params.searchParams,
 				headers: { authorization: auth }
 			};
 			return this.axios(config);
@@ -559,7 +632,7 @@ module.exports = {
 			const config = {
 				url: this.settings.baseUrl + url,
 				method: "PUT",
-				data: params,
+				data: params.json,
 				headers: { authorization: auth }
 			};
 			return this.axios(config);
