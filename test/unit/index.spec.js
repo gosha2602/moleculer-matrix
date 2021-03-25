@@ -123,7 +123,18 @@ describe("Test MyService", () => {
 		return broker
 			.call("matrix.getRoomDetails", { roomId: "!xjDOpNQnEhPoIXPAYk:mtx.pointprism.com" })
 			.then(res => {
-				console.log(res);
+				//console.log(res);
+				expect(res).toBeDefined();
+			});
+	});
+
+	it("getRoomIdByAlias", () => {
+		return broker
+			.call("matrix.getRoomIdByAlias", {
+				alias: "office69:mtx.pointprism.com"
+			})
+			.then(res => {
+				console.log("getRoomIdByAlias", res);
 				expect(res).toBeDefined();
 			});
 	});

@@ -361,6 +361,16 @@ module.exports = {
 				const params = ctx.params;
 				return this._addRoomMembership(params);
 			}
+		},
+		getRoomIdByAlias: {
+			params: {
+				alias: "string"
+			},
+			handler(ctx) {
+				console.log(ctx.params);
+				const { alias, user } = ctx.params;
+				return this._getRoomIdByAlias(alias);
+			}
 		}
 	},
 
@@ -442,6 +452,23 @@ module.exports = {
 
 			return this._matrixGet(url, {});
 		},
+
+		/**
+		 * Requests that the server resolve a room alias to a room ID.
+		 * @param {string} alias room alias
+		 * @param {string} user user name for loginAsUser
+		 */
+		_getRoomIdByAlias(alias) {
+			const url = `_matrix/client/r0/directory/room/%23${alias}`;
+			return this._matrixGet(url, {});
+			//	return this._getAsUser(url, user, {});
+		},
+
+		/**
+		 * Get all pushers
+		 * @param {string} user
+		 * @returns {Promise}
+		 */
 		_getAllPushers(user) {
 			const url =
 				this.settings.matrix.paths.userPushers + this.makeFullUserId(user) + "/pushers";
@@ -470,6 +497,7 @@ module.exports = {
 			if (params.admin === undefined) params.admin = false;
 			if (!params.displayname) params.displayname = params.user;
 			params.deactivated = false;
+
 			delete params.user;
 			return await this._matrixPut(url, params);
 		},
@@ -502,7 +530,7 @@ module.exports = {
 				preset: params.preset,
 				room_alias_name: params.roomAlias
 			};
-			const { access_token } = await this.loginAsUser(params.admin);
+			/* const { access_token } = await this.loginAsUser(params.admin);
 			const auth = `Bearer ${access_token}`;
 			const config = {
 				url: this.settings.baseUrl + "_matrix/client/r0/createRoom",
@@ -511,7 +539,8 @@ module.exports = {
 				headers: { authorization: auth }
 			};
 			const { data } = await this.axios(config);
-			return data;
+			*/
+			return this._postAsUser("_matrix/client/r0/createRoom", params.admin, room);
 		},
 		/**
 		 * _addRoomMembership send invite  from roomAdmin to user for join in room
@@ -562,6 +591,27 @@ module.exports = {
 				token: this.dataAccess.access_token
 			});
 
+			return data;
+		},
+		async _postAsUser(url, user, params) {
+			const { access_token } = await this.loginAsUser(user);
+			const dataParams = {
+				responseType: "json",
+				token: access_token,
+				json: params
+			};
+			const { data } = await this._post(url, dataParams);
+			return data;
+		},
+
+		async _getAsUser(url, user, params) {
+			const { access_token } = await this.loginAsUser(user);
+			const dataParams = {
+				responseType: "json",
+				token: access_token,
+				searchParams: params
+			};
+			const { data } = await this._get(url, dataParams);
 			return data;
 		},
 		/**
